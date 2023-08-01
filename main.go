@@ -31,9 +31,10 @@ import (
 
 	"github.com/metal-stack/frr-monitor/pkg/frr"
 	"github.com/metal-stack/frr-monitor/pkg/kernel"
+	"github.com/vishvananda/netlink"
 )
 
-// Starts lldp on every ethernet nic that is up
+// gather kernel and frr routes
 func main() {
 
 	kernelRoutes, err := kernel.GetRoutes()
@@ -43,7 +44,11 @@ func main() {
 	fmt.Println("Kernel Routes")
 
 	for _, r := range kernelRoutes {
-		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
+		link, err := netlink.LinkByIndex(r.LinkIndex)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Prefix:%s Nexthop:%s Interface:%s\n", r.Dst, r.Gw, link.Attrs().Name)
 	}
 
 	zebraRoutes, err := frr.GetRoutes()
@@ -54,7 +59,7 @@ func main() {
 	for _, r := range zebraRoutes {
 		nexthops := []string{}
 		for _, nh := range r.Nexthops {
-			nexthops = append(nexthops, nh.IP)
+			nexthops = append(nexthops, nh.IP+"%"+nh.InterfaceName)
 		}
 		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
 	}
