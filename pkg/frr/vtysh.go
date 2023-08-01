@@ -7,90 +7,67 @@ import (
 	"net"
 )
 
-type (
-	BGPSummary struct {
-		Ipv4Unicast Ipv4Unicast `json:"ipv4Unicast"`
-	}
-	Ipv4Unicast struct {
-		RouterID    string          `json:"routerId"`
-		Peers       map[string]Peer `json:"peers"`
-		FailedPeers int             `json:"failedPeers"`
-		TotalPeers  int             `json:"totalPeers"`
-	}
-	Peer struct {
-		Hostname                   string `json:"hostname"`
-		RemoteAs                   int64  `json:"remoteAs"`
-		LocalAs                    int64  `json:"localAs"`
-		Version                    int    `json:"version"`
-		MsgRcvd                    int    `json:"msgRcvd"`
-		MsgSent                    int    `json:"msgSent"`
-		TableVersion               int    `json:"tableVersion"`
-		Outq                       int    `json:"outq"`
-		Inq                        int    `json:"inq"`
-		PeerUptime                 string `json:"peerUptime"`
-		PeerUptimeMsec             int    `json:"peerUptimeMsec"`
-		PeerUptimeEstablishedEpoch int    `json:"peerUptimeEstablishedEpoch"`
-		PfxRcd                     int    `json:"pfxRcd"`
-		PfxSnt                     int    `json:"pfxSnt"`
-		State                      string `json:"state"`
-		PeerState                  string `json:"peerState"`
-		ConnectionsEstablished     int    `json:"connectionsEstablished"`
-		ConnectionsDropped         int    `json:"connectionsDropped"`
-		IDType                     string `json:"idType"`
-	}
 
-	Routes []Route
-	Route  struct {
-		Prefix                   string `json:"prefix"`
-		PrefixLen                int    `json:"prefixLen"`
-		Protocol                 string `json:"protocol"`
-		VrfID                    int    `json:"vrfId"`
-		VrfName                  string `json:"vrfName"`
-		Selected                 bool   `json:"selected"`
-		DestSelected             bool   `json:"destSelected"`
-		Distance                 int    `json:"distance"`
-		Metric                   int    `json:"metric"`
-		Installed                bool   `json:"installed"`
-		Table                    int    `json:"table"`
-		InternalStatus           int    `json:"internalStatus"`
-		InternalFlags            int    `json:"internalFlags"`
-		InternalNextHopNum       int    `json:"internalNextHopNum"`
-		InternalNextHopActiveNum int    `json:"internalNextHopActiveNum"`
-		NexthopGroupID           int    `json:"nexthopGroupId"`
-		Uptime                   string `json:"uptime"`
-		Nexthops                 []struct {
-			Flags          int    `json:"flags"`
-			Fib            bool   `json:"fib"`
-			IP             string `json:"ip"`
-			Afi            string `json:"afi"`
-			InterfaceIndex int    `json:"interfaceIndex"`
-			InterfaceName  string `json:"interfaceName"`
-			Active         bool   `json:"active"`
-			Weight         int    `json:"weight"`
-		} `json:"nexthops"`
-		AsPath           string `json:"asPath"`
-		Communities      string `json:"communities"`
-		LargeCommunities string `json:"largeCommunities"`
-	}
-)
 
-func GetRoutes() (Routes, error) {
+type Route struct {
+	Valid             bool     `json:"valid"`
+	PathFrom          string   `json:"pathFrom"`
+	Prefix            string   `json:"prefix"`
+	PrefixLen         int      `json:"prefixLen"`
+	Network           string   `json:"network"`
+	Version           int      `json:"version"`
+	Weight            int      `json:"weight"`
+	PeerID            string   `json:"peerId"`
+	Path              string   `json:"path"`
+	Origin            string   `json:"origin"`
+	AnnounceNexthopSelf bool   `json:"announceNexthopSelf"`
+	Nexthops          []Nexthop `json:"nexthops"`
+}
+
+type Nexthop struct {
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
+	AFI      string `json:"afi"`
+	Used     bool   `json:"used"`
+}
+
+type VRF struct {
+	VrfID         int               `json:"vrfId"`
+	VrfName       string            `json:"vrfName"`
+	TableVersion  int               `json:"tableVersion"`
+	RouterID      string            `json:"routerId"`
+	DefaultLocPrf int               `json:"defaultLocPrf"`
+	LocalAS       int64             `json:"localAS"`
+	Routes        map[string][]Route `json:"routes"`
+}
+
+type Routes map[string][]Route
+type VRFs map[string]VRF
+
+func GetRoutes() (VRFs, error) {
 	socketPath, err := lookupSocketPath("bgpd")
 	if err != nil {
-		return nil, err
-	}
-	output, err := runCmd(socketPath, "show ip route json")
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to lookup socket path: %w", err)
 	}
 
-	var routes Routes
-	err = json.Unmarshal(output, &routes)
+	_, err = runCmd(socketPath, "enable")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to run command: %w", err)
 	}
+	output, err := runCmd(socketPath, "show bgp vrf all ipv4 unicast json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command: %w", err)
+	}
+	// fmt.Println(string(output))
 
-	return routes, nil
+	var vrfs VRFs
+	err = json.Unmarshal(output, &vrfs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
+	}
+	// fmt.Printf("%v\n", vrfs)
+
+	return vrfs, nil
 }
 
 func lookupSocketPath(daemon string) (string, error) {

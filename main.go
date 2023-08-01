@@ -31,7 +31,6 @@ import (
 
 	"github.com/metal-stack/frr-monitor/pkg/frr"
 	"github.com/metal-stack/frr-monitor/pkg/kernel"
-	"github.com/vishvananda/netlink"
 )
 
 // gather kernel and frr routes
@@ -44,23 +43,23 @@ func main() {
 	fmt.Println("Kernel Routes")
 
 	for _, r := range kernelRoutes {
-		link, err := netlink.LinkByIndex(r.LinkIndex)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("Prefix:%s Nexthop:%s Interface:%s\n", r.Dst, r.Gw, link.Attrs().Name)
+		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
 	}
 
-	zebraRoutes, err := frr.GetRoutes()
+	vrfs, err := frr.GetRoutes()
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("Zebra Routes")
-	for _, r := range zebraRoutes {
-		nexthops := []string{}
-		for _, nh := range r.Nexthops {
-			nexthops = append(nexthops, nh.IP+"%"+nh.InterfaceName)
+	for _, vrf := range vrfs {
+		for _, vr := range vrf.Routes {
+			for _, r := range vr {
+				nexthops := []string{}
+				for _, nh := range r.Nexthops {
+					nexthops = append(nexthops, nh.IP)
+				}
+				fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
+			}
 		}
-		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
 	}
 }
