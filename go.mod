@@ -2,7 +2,7 @@ module github.com/metal-stack/frr-monitor
 
 go 1.20
 
-require github.com/vishvananda/netlink v1.1.0
+require github.com/vishvananda/netlink v1.2.1-beta.2
 
 require (
 	github.com/vishvananda/netns v0.0.4 // indirect
