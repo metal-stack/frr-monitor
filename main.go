@@ -29,15 +29,22 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/metal-stack/frr-monitor/frr"
-	"github.com/metal-stack/frr-monitor/kernel"
+	"github.com/metal-stack/frr-monitor/pkg/frr"
+	"github.com/metal-stack/frr-monitor/pkg/kernel"
 )
 
 // Starts lldp on every ethernet nic that is up
 func main() {
 
+	kernelRoutes, err := kernel.GetRoutes()
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("Kernel Routes")
-	_, _ = kernel.GetRoutes()
+
+	for _, r := range kernelRoutes {
+		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
+	}
 
 	zebraRoutes, err := frr.GetRoutes()
 	if err != nil {

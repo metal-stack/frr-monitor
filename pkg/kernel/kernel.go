@@ -1,28 +1,28 @@
 package kernel
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/vishvananda/netlink"
 )
 
-func GetRoutes() ([]string, error) {
+func GetRoutes() ([]netlink.Route, error) {
 
 	links, err := netlink.LinkList()
 	if err != nil {
 		return nil, err
 	}
 
+	var routes []netlink.Route
+	var errs []error
 	for _, link := range links {
 		routesv4, err := netlink.RouteList(link, netlink.FAMILY_V4)
 		if err != nil {
-			return nil, err
+			errs = append(errs, err)
+			continue
 		}
-
-		for _, route := range routesv4 {
-			fmt.Printf("Link: %q Route:%v\n", link.Attrs().Name, route)
-		}
+		routes = append(routes, routesv4...)
 	}
 
-	return nil, nil
+	return routes, errors.Join(errs...)
 }
