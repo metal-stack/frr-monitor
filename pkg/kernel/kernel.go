@@ -22,6 +22,12 @@ func GetRoutes() ([]netlink.Route, error) {
 			continue
 		}
 		routes = append(routes, routesv4...)
+		routesv6, err := netlink.RouteList(link, netlink.FAMILY_V6)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		routes = append(routes, routesv6...)
 	}
 
 	return routes, errors.Join(errs...)
