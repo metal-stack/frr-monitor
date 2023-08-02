@@ -26,40 +26,46 @@ SOFTWARE.
 package main
 
 import (
-	"fmt"
+	"log"
 	"strings"
 
 	"github.com/metal-stack/frr-monitor/pkg/frr"
-	"github.com/metal-stack/frr-monitor/pkg/kernel"
 )
 
 // gather kernel and frr routes
 func main() {
 
-	kernelRoutes, err := kernel.GetRoutes()
+	// kernelRoutes, err := kernel.GetRoutes()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("Kernel Routes")
+
+	// for _, r := range kernelRoutes {
+	// 	fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
+	// }
+
+	// vrfs, err := frr.GetRoutes()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("Zebra Routes")
+	// for _, vrf := range vrfs {
+	// 	for _, vr := range vrf.Routes {
+	// 		for _, r := range vr {
+	// 			nexthops := []string{}
+	// 			for _, nh := range r.Nexthops {
+	// 				nexthops = append(nexthops, nh.IP)
+	// 			}
+	// 			fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
+	// 		}
+	// 	}
+	// }
+
+	missing, err := frr.GetMissingRMAC()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Kernel Routes")
 
-	for _, r := range kernelRoutes {
-		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
-	}
-
-	vrfs, err := frr.GetRoutes()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("Zebra Routes")
-	for _, vrf := range vrfs {
-		for _, vr := range vrf.Routes {
-			for _, r := range vr {
-				nexthops := []string{}
-				for _, nh := range r.Nexthops {
-					nexthops = append(nexthops, nh.IP)
-				}
-				fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
-			}
-		}
-	}
+	log.Printf("missing RMAC:%q\n", strings.Join(missing, ","))
 }
