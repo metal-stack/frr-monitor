@@ -68,6 +68,8 @@ func GetMissingRMAC() ([]string, error) {
 	for m := range missing {
 		result = append(result, m)
 	}
+
+	slices.Sort(result)
 	return result, nil
 }
 
