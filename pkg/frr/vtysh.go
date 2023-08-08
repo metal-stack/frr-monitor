@@ -7,21 +7,19 @@ import (
 	"net"
 )
 
-
-
 type Route struct {
-	Valid             bool     `json:"valid"`
-	PathFrom          string   `json:"pathFrom"`
-	Prefix            string   `json:"prefix"`
-	PrefixLen         int      `json:"prefixLen"`
-	Network           string   `json:"network"`
-	Version           int      `json:"version"`
-	Weight            int      `json:"weight"`
-	PeerID            string   `json:"peerId"`
-	Path              string   `json:"path"`
-	Origin            string   `json:"origin"`
-	AnnounceNexthopSelf bool   `json:"announceNexthopSelf"`
-	Nexthops          []Nexthop `json:"nexthops"`
+	Valid               bool      `json:"valid"`
+	PathFrom            string    `json:"pathFrom"`
+	Prefix              string    `json:"prefix"`
+	PrefixLen           int       `json:"prefixLen"`
+	Network             string    `json:"network"`
+	Version             int       `json:"version"`
+	Weight              int       `json:"weight"`
+	PeerID              string    `json:"peerId"`
+	Path                string    `json:"path"`
+	Origin              string    `json:"origin"`
+	AnnounceNexthopSelf bool      `json:"announceNexthopSelf"`
+	Nexthops            []Nexthop `json:"nexthops"`
 }
 
 type Nexthop struct {
@@ -32,19 +30,29 @@ type Nexthop struct {
 }
 
 type VRF struct {
-	VrfID         int               `json:"vrfId"`
-	VrfName       string            `json:"vrfName"`
-	TableVersion  int               `json:"tableVersion"`
-	RouterID      string            `json:"routerId"`
-	DefaultLocPrf int               `json:"defaultLocPrf"`
-	LocalAS       int64             `json:"localAS"`
+	VrfID         int                `json:"vrfId"`
+	VrfName       string             `json:"vrfName"`
+	TableVersion  int                `json:"tableVersion"`
+	RouterID      string             `json:"routerId"`
+	DefaultLocPrf int                `json:"defaultLocPrf"`
+	LocalAS       int64              `json:"localAS"`
 	Routes        map[string][]Route `json:"routes"`
+}
+
+type NextHopInfo struct {
+	NexthopIp string `json:"nexthopIp"`
+	RouterMac string `json:"routerMac"`
+}
+
+type VRFInfo struct {
+	NumNextHops int                    `json:"numNextHops"`
+	NextHops    map[string]NextHopInfo `json:"nexthops"`
 }
 
 type Routes map[string][]Route
 type VRFs map[string]VRF
 
-func GetRoutes() (VRFs, error) {
+func GetVRFs() (VRFs, error) {
 	socketPath, err := lookupSocketPath("bgpd")
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup socket path: %w", err)
@@ -58,14 +66,45 @@ func GetRoutes() (VRFs, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to run command: %w", err)
 	}
-	// fmt.Println(string(output))
 
 	var vrfs VRFs
 	err = json.Unmarshal(output, &vrfs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal json: %w", err)
 	}
-	// fmt.Printf("%v\n", vrfs)
+
+	return vrfs, nil
+}
+
+func GetEVPNVNINexthops() (map[string]VRFInfo, error) {
+	output, err := executeVTYSH("zebra", "show evpn next-hops vni all json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command: %w", err)
+	}
+	vrfs := map[string]VRFInfo{}
+
+	var vrfData map[string]map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &vrfData); err != nil {
+		return nil, err
+	}
+
+	for vrfID, vrfInfo := range vrfData {
+		numNextHops := int(vrfInfo["numNextHops"].(float64))
+		nextHops := map[string]NextHopInfo{}
+		for ip, hop := range vrfInfo {
+			if ip != "numNextHops" {
+				nextHop := hop.(map[string]interface{})
+				nextHops[ip] = NextHopInfo{
+					NexthopIp: nextHop["nexthopIp"].(string),
+					RouterMac: nextHop["routerMac"].(string),
+				}
+			}
+		}
+		vrfs[vrfID] = VRFInfo{
+			NumNextHops: numNextHops,
+			NextHops:    nextHops,
+		}
+	}
 
 	return vrfs, nil
 }
@@ -115,4 +154,17 @@ func runCmd(socketPath string, cmd string) ([]byte, error) {
 	}
 
 	return output[:len(output)-1], nil
+}
+
+func executeVTYSH(socket, cmd string) ([]byte, error) {
+	socketPath, err := lookupSocketPath(socket)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup socket path: %w", err)
+	}
+
+	_, err = runCmd(socketPath, "enable")
+	if err != nil {
+		return nil, fmt.Errorf("failed to run command: %w", err)
+	}
+	return runCmd(socketPath, cmd)
 }
