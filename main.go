@@ -90,6 +90,15 @@ func main() {
 			}
 			if !found {
 				fmt.Printf("VNI:%s VRF:%s Nexthop:%s not found in evpn next-hops\n", vni, vrf.VrfName, vrfnh)
+				for _, vr := range vrf.Routes {
+					for _, r := range vr {
+						for i, nh := range r.Nexthops {
+							if nh.IP == vrfnh {
+								fmt.Printf("	Route:%s Nexthop: %s (via %s)\n", r.Network, vrfnh, r.Nexthops[i].Hostname)
+							}
+						}
+					}
+				}
 			}
 		}
 	}
