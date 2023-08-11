@@ -27,38 +27,78 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"os"
 	"strings"
 
 	"github.com/metal-stack/frr-monitor/pkg/frr"
-	"github.com/metal-stack/frr-monitor/pkg/kernel"
 )
 
 // gather kernel and frr routes
 func main() {
 
-	kernelRoutes, err := kernel.GetRoutes()
+	// kernelRoutes, err := kernel.GetRoutes()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("Kernel Routes")
+
+	// for _, r := range kernelRoutes {
+	// 	fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
+	// }
+
+	vrfs, err := frr.GetVRFs()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Kernel Routes")
-
-	for _, r := range kernelRoutes {
-		fmt.Printf("Prefix:%s Nexthop:%s\n", r.Dst, r.Gw)
-	}
-
-	vrfs, err := frr.GetRoutes()
+	evpns, err := frr.GetEVPNVNINexthops()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Zebra Routes")
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
 	for _, vrf := range vrfs {
+		if vrf.VrfName == "default" {
+			continue
+		}
+		nexthops := map[string]bool{}
 		for _, vr := range vrf.Routes {
 			for _, r := range vr {
-				nexthops := []string{}
 				for _, nh := range r.Nexthops {
-					nexthops = append(nexthops, nh.IP)
+					if nh.Hostname != hostname {
+						nexthops[nh.IP] = true
+					}
 				}
-				fmt.Printf("Prefix:%s Nexthop:%s\n", r.Prefix, strings.Join(nexthops, ","))
+			}
+		}
+		vni := strings.ReplaceAll(vrf.VrfName, "vrf", "")
+		for vrfnh := range nexthops {
+			found := false
+			for _, evpnnh := range evpns[vni].NextHops {
+				if vrfnh == evpnnh.NexthopIp {
+					_, err := net.ParseMAC(evpnnh.RouterMac)
+					if err == nil {
+						found = true
+						break
+					} else {
+						fmt.Printf("VNI:%s VRF:%s Nexthop:%s has invalid mac address %s,%q\n", vni, vrf.VrfName, vrfnh, evpnnh.RouterMac, err)
+					}
+				}
+			}
+			if !found {
+				fmt.Printf("VNI:%s VRF:%s Nexthop:%s not found in evpn next-hops\n", vni, vrf.VrfName, vrfnh)
+				for _, vr := range vrf.Routes {
+					for _, r := range vr {
+						for i, nh := range r.Nexthops {
+							if nh.IP == vrfnh {
+								fmt.Printf("	Route:%s Nexthop: %s (via %s)\n", r.Network, vrfnh, r.Nexthops[i].Hostname)
+							}
+						}
+					}
+				}
 			}
 		}
 	}
